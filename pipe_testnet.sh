@@ -9,12 +9,11 @@ RED="\e[31m"
 PINK="\e[35m"
 NC="\e[0m"
 
-# Проверка и установка утилит
-sudo apt update -y && sudo apt upgrade -y
-sudo apt install -y figlet whiptail curl screen wget
+# Установка утилит
+sudo apt update -y && sudo apt install -y figlet whiptail curl screen wget
 
 # Приветствие
-echo -e "${PINK}$(figlet -w 150 -f standard "Softs by The Gentleman")${NC}"
+echo -e "${PINK}$(figlet -w 150 -f standard "Softs by Gentleman")${NC}"
 echo "============================================================================================================================="
 echo "Добро пожаловать! Пока идёт установка, подпишись на мой Telegram-канал:"
 echo ""
@@ -38,20 +37,18 @@ animate_loading() {
 install_node() {
   echo -e "${BLUE}Начинаем установку POP Node...${NC}"
 
-  # Ввод параметров
   INVITE=$(whiptail --inputbox "Введите ваш invite code:" 10 60 --title "Invite Code" 3>&1 1>&2 2>&3)
-  SOLANA=$(whiptail --inputbox "Введите ваш Solana-адрес (для наград):" 10 60 --title "Solana Address" 3>&1 1>&2 2>&3)
+  SOLANA=$(whiptail --inputbox "Введите ваш Solana-адрес:" 10 60 --title "Solana" 3>&1 1>&2 2>&3)
   RAM=$(whiptail --inputbox "Сколько RAM (в ГБ) выделить под кэш?" 10 60 --title "RAM" 3>&1 1>&2 2>&3)
   DISK=$(whiptail --inputbox "Сколько диска (в ГБ) выделить под кэш?" 10 60 --title "Disk" 3>&1 1>&2 2>&3)
 
-  NAME=$(whiptail --inputbox "Ваш ник или имя узла:" 10 60 --title "Node Name" 3>&1 1>&2 2>&3)
-  EMAIL=$(whiptail --inputbox "Введите email:" 10 60 --title "Email" 3>&1 1>&2 2>&3)
-  SITE=$(whiptail --inputbox "Введите ваш сайт (https://...):" 10 60 --title "Website" 3>&1 1>&2 2>&3)
-  TG=$(whiptail --inputbox "Введите Telegram (@...):" 10 60 --title "Telegram" 3>&1 1>&2 2>&3)
-  DISCORD=$(whiptail --inputbox "Введите Discord (username#0000):" 10 60 --title "Discord" 3>&1 1>&2 2>&3)
-  TWITTER=$(whiptail --inputbox "Введите Twitter (@...):" 10 60 --title "Twitter" 3>&1 1>&2 2>&3)
+  NAME=$(whiptail --inputbox "Имя вашей ноды:" 10 60 --title "Node name" 3>&1 1>&2 2>&3)
+  EMAIL=$(whiptail --inputbox "Введите Email:" 10 60 --title "Email" 3>&1 1>&2 2>&3)
+  SITE=$(whiptail --inputbox "Ваш сайт (https://...):" 10 60 --title "Website" 3>&1 1>&2 2>&3)
+  TG=$(whiptail --inputbox "Ваш Telegram (@...):" 10 60 --title "Telegram" 3>&1 1>&2 2>&3)
+  DISCORD=$(whiptail --inputbox "Discord (name#0000):" 10 60 --title "Discord" 3>&1 1>&2 2>&3)
+  TWITTER=$(whiptail --inputbox "Twitter (@...):" 10 60 --title "Twitter" 3>&1 1>&2 2>&3)
 
-  # Определяем архитектуру
   ARCH=$(uname -m)
   if [[ "$ARCH" == "x86_64" ]]; then
     BIN_URL="https://dl.pipecdn.app/v0.2.8/pop"
@@ -65,11 +62,10 @@ install_node() {
   mkdir -p ~/pipe/download_cache
   cd ~/pipe || exit
 
-  echo -e "${CYAN}Скачиваем бинарник...${NC}"
   wget -O pop "$BIN_URL"
   chmod +x pop
 
-  echo -e "${GREEN}Запускаем pop в screen-сессии...${NC}"
+  echo -e "${CYAN}Создаем config.json...${NC}"
   cat > config.json <<EOF
 {
   "pop_name": "$NAME",
@@ -105,8 +101,10 @@ install_node() {
 }
 EOF
 
-  screen -S popnode -dm bash -c "./pop --config config.json"
-  echo -e "${GREEN}✅ Нода установлена и запущена в screen сессии 'popnode'.${NC}"
+  echo -e "${GREEN}Запускаем pop через screen с POP_CONFIG_PATH...${NC}"
+  screen -S popnode -dm bash -c 'export POP_CONFIG_PATH=~/pipe/config.json && ./pop'
+
+  echo -e "${GREEN}✅ Нода установлена и запущена в screen-сессии 'popnode'.${NC}"
 }
 
 check_status() {
@@ -130,11 +128,10 @@ update_node() {
   rm -f pop
   wget -O pop https://dl.pipecdn.app/v0.2.8/pop
   chmod +x pop
-  screen -S popnode -dm bash -c "./pop --config config.json"
+  screen -S popnode -dm bash -c 'export POP_CONFIG_PATH=~/pipe/config.json && ./pop'
   echo -e "${GREEN}✅ Обновлено и перезапущено!${NC}"
 }
 
-# Меню
 animate_loading
 CHOICE=$(whiptail --title "PIPE Node Установщик" \
   --menu "Выберите действие:" 15 60 6 \
