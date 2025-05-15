@@ -9,7 +9,12 @@ RED="\e[31m"
 PINK="\e[35m"
 NC="\e[0m"
 
-# Установка утилит
+INSTALL_DIR=~/pipe
+BIN_NAME=pop
+CONFIG=$INSTALL_DIR/config.json
+LOG_FILE=$INSTALL_DIR/pop.log
+
+# Обновление и зависимости
 sudo apt update -y && sudo apt install -y figlet whiptail curl screen wget
 
 # Приветствие
@@ -34,18 +39,20 @@ animate_loading() {
   echo ""
 }
 
+# Установка
 install_node() {
-  echo -e "${BLUE}Начинаем установку POP Node...${NC}"
+  mkdir -p $INSTALL_DIR/download_cache
+  cd $INSTALL_DIR || exit
 
   INVITE=$(whiptail --inputbox "Введите ваш invite code:" 10 60 --title "Invite Code" 3>&1 1>&2 2>&3)
   SOLANA=$(whiptail --inputbox "Введите ваш Solana-адрес:" 10 60 --title "Solana" 3>&1 1>&2 2>&3)
-  RAM=$(whiptail --inputbox "Сколько RAM (в ГБ) выделить под кэш?" 10 60 --title "RAM" 3>&1 1>&2 2>&3)
-  DISK=$(whiptail --inputbox "Сколько диска (в ГБ) выделить под кэш?" 10 60 --title "Disk" 3>&1 1>&2 2>&3)
+  RAM=$(whiptail --inputbox "RAM (в ГБ) под кэш:" 10 60 --title "RAM" 3>&1 1>&2 2>&3)
+  DISK=$(whiptail --inputbox "Диск (в ГБ) под кэш:" 10 60 --title "Disk" 3>&1 1>&2 2>&3)
 
   NAME=$(whiptail --inputbox "Имя вашей ноды:" 10 60 --title "Node name" 3>&1 1>&2 2>&3)
-  EMAIL=$(whiptail --inputbox "Введите Email:" 10 60 --title "Email" 3>&1 1>&2 2>&3)
-  SITE=$(whiptail --inputbox "Ваш сайт (https://...):" 10 60 --title "Website" 3>&1 1>&2 2>&3)
-  TG=$(whiptail --inputbox "Ваш Telegram (@...):" 10 60 --title "Telegram" 3>&1 1>&2 2>&3)
+  EMAIL=$(whiptail --inputbox "Email:" 10 60 --title "Email" 3>&1 1>&2 2>&3)
+  SITE=$(whiptail --inputbox "Сайт (https://...):" 10 60 --title "Website" 3>&1 1>&2 2>&3)
+  TG=$(whiptail --inputbox "Telegram (@...):" 10 60 --title "Telegram" 3>&1 1>&2 2>&3)
   DISCORD=$(whiptail --inputbox "Discord (name#0000):" 10 60 --title "Discord" 3>&1 1>&2 2>&3)
   TWITTER=$(whiptail --inputbox "Twitter (@...):" 10 60 --title "Twitter" 3>&1 1>&2 2>&3)
 
@@ -55,28 +62,18 @@ install_node() {
   elif [[ "$ARCH" == "aarch64" ]]; then
     BIN_URL="https://dl.pipecdn.app/v0.2.8/pop-arm64"
   else
-    echo -e "${RED}❌ Неизвестная архитектура: $ARCH. Установка прервана.${NC}"
+    echo -e "${RED}Неизвестная архитектура: $ARCH${NC}"
     exit 1
   fi
 
-  mkdir -p ~/pipe/download_cache
-  cd ~/pipe || exit
+  wget -O $BIN_NAME "$BIN_URL" && chmod +x $BIN_NAME
 
-  wget -O pop "$BIN_URL"
-  chmod +x pop
-
-  echo -e "${CYAN}Создаем config.json...${NC}"
-  cat > config.json <<EOF
+  cat > $CONFIG <<EOF
 {
   "pop_name": "$NAME",
   "pop_location": "Earth, Internet",
   "invite_code": "$INVITE",
-  "server": {
-    "host": "0.0.0.0",
-    "port": 443,
-    "http_port": 80,
-    "workers": 0
-  },
+  "server": { "host": "0.0.0.0", "port": 443, "http_port": 80, "workers": 0 },
   "cache_config": {
     "memory_cache_size_mb": $((RAM * 1024)),
     "disk_cache_path": "./download_cache",
@@ -85,9 +82,7 @@ install_node() {
     "respect_origin_headers": true,
     "max_cacheable_size_mb": 1024
   },
-  "api_endpoints": {
-    "base_url": "https://dataplane.pipenetwork.com"
-  },
+  "api_endpoints": { "base_url": "https://dataplane.pipenetwork.com" },
   "identity_config": {
     "node_name": "$NAME",
     "name": "$NAME",
@@ -101,52 +96,58 @@ install_node() {
 }
 EOF
 
-  echo -e "${GREEN}Запускаем pop через screen с POP_CONFIG_PATH...${NC}"
-  screen -S popnode -dm bash -c 'export POP_CONFIG_PATH=~/pipe/config.json && ./pop'
-
-  echo -e "${GREEN}✅ Нода установлена и запущена в screen-сессии 'popnode'.${NC}"
+  screen -S popnode -dm bash -c "export POP_CONFIG_PATH=$CONFIG && ./$BIN_NAME | tee $LOG_FILE"
+  echo -e "${GREEN}Нода установлена и запущена в screen сессии 'popnode'.${NC}"
 }
 
+# Проверка
 check_status() {
-  echo -e "${CYAN}Проверка статуса POP Node:${NC}"
-  screen -ls | grep popnode && echo -e "${GREEN}Нода запущена.${NC}" || echo -e "${RED}Нода не запущена.${NC}"
+  if screen -list | grep -q popnode; then
+    echo -e "${GREEN}Нода работает в screen 'popnode'${NC}"
+  else
+    echo -e "${RED}Нода не запущена.${NC}"
+  fi
 }
 
-remove_node() {
-  echo -e "${RED}Удаляем ноду...${NC}"
+# Лог
+show_log() {
+  if [[ -f $LOG_FILE ]]; then
+    tail -n 50 $LOG_FILE
+  else
+    echo -e "${RED}Файл лога не найден.${NC}"
+  fi
+}
+
+# Войти в screen
+attach_screen() {
+  screen -r popnode
+}
+
+# Перезапуск
+restart_node() {
   screen -S popnode -X quit || true
-  pkill -f pop || true
-  rm -rf ~/pipe
-  echo -e "${GREEN}✅ Удалено!${NC}"
+  screen -S popnode -dm bash -c "export POP_CONFIG_PATH=$CONFIG && ./$BIN_NAME | tee $LOG_FILE"
+  echo -e "${GREEN}Нода перезапущена.${NC}"
 }
 
-update_node() {
-  echo -e "${BLUE}Обновляем POP Node...${NC}"
-  screen -S popnode -X quit || true
-  pkill -f pop || true
-  cd ~/pipe || exit
-  rm -f pop
-  wget -O pop https://dl.pipecdn.app/v0.2.8/pop
-  chmod +x pop
-  screen -S popnode -dm bash -c 'export POP_CONFIG_PATH=~/pipe/config.json && ./pop'
-  echo -e "${GREEN}✅ Обновлено и перезапущено!${NC}"
-}
-
+# Меню
 animate_loading
-CHOICE=$(whiptail --title "PIPE Node Установщик" \
-  --menu "Выберите действие:" 15 60 6 \
-  "1" "Установить POP Node" \
+CHOICE=$(whiptail --title "PIPE Node Меню" \
+  --menu "Выберите действие:" 20 60 10 \
+  "1" "Установить ноду" \
   "2" "Проверить статус" \
-  "3" "Удалить ноду" \
-  "4" "Обновить POP" \
-  "5" "Выход" \
+  "3" "Показать лог (50 строк)" \
+  "4" "Зайти в screen" \
+  "5" "Перезапустить ноду" \
+  "6" "Выход" \
   3>&1 1>&2 2>&3)
 
 case $CHOICE in
   1) install_node ;;
   2) check_status ;;
-  3) remove_node ;;
-  4) update_node ;;
-  5) echo -e "${CYAN}Выход.${NC}" ;;
+  3) show_log ;;
+  4) attach_screen ;;
+  5) restart_node ;;
+  6) echo -e "${CYAN}Выход.${NC}" ;;
   *) echo -e "${RED}Неверный выбор.${NC}" ;;
 esac
