@@ -14,14 +14,12 @@ sudo apt update -y && sudo apt upgrade -y
 sudo apt install -y figlet whiptail curl screen wget
 
 # Приветствие
-echo -e "${PINK}$(figlet -w 150 -f standard "Softs by Gentleman")${NC}"
-echo -e "${PINK}$(figlet -w 150 -f standard "x WESNA")${NC}"
-echo "===================================================================================================================================="
-echo "Добро пожаловать! Начинаем установку необходимых библиотек, пока подпишись на наши Telegram-каналы для обновлений и поддержки:"
+echo -e "${PINK}$(figlet -w 150 -f standard "Softs by The Gentleman")${NC}"
+echo "============================================================================================================================="
+echo "Добро пожаловать! Пока идёт установка, подпишись на мой Telegram-канал:"
 echo ""
-echo "Gentleman - https://t.me/GentleChron"
-echo "Wesna     - https://t.me/softs_by_wesna"
-echo "===================================================================================================================================="
+echo "The Gentleman — https://t.me/GentleChron"
+echo "============================================================================================================================="
 echo ""
 
 # Анимация
@@ -40,11 +38,18 @@ animate_loading() {
 install_node() {
   echo -e "${BLUE}Начинаем установку POP Node...${NC}"
 
-  # Запрашиваем данные
+  # Ввод параметров
   INVITE=$(whiptail --inputbox "Введите ваш invite code:" 10 60 --title "Invite Code" 3>&1 1>&2 2>&3)
-  SOLANA=$(whiptail --inputbox "Введите ваш публичный Solana-адрес:" 10 60 --title "Solana Address" 3>&1 1>&2 2>&3)
+  SOLANA=$(whiptail --inputbox "Введите ваш Solana-адрес (для наград):" 10 60 --title "Solana Address" 3>&1 1>&2 2>&3)
   RAM=$(whiptail --inputbox "Сколько RAM (в ГБ) выделить под кэш?" 10 60 --title "RAM" 3>&1 1>&2 2>&3)
   DISK=$(whiptail --inputbox "Сколько диска (в ГБ) выделить под кэш?" 10 60 --title "Disk" 3>&1 1>&2 2>&3)
+
+  NAME=$(whiptail --inputbox "Ваш ник или имя узла:" 10 60 --title "Node Name" 3>&1 1>&2 2>&3)
+  EMAIL=$(whiptail --inputbox "Введите email:" 10 60 --title "Email" 3>&1 1>&2 2>&3)
+  SITE=$(whiptail --inputbox "Введите ваш сайт (https://...):" 10 60 --title "Website" 3>&1 1>&2 2>&3)
+  TG=$(whiptail --inputbox "Введите Telegram (@...):" 10 60 --title "Telegram" 3>&1 1>&2 2>&3)
+  DISCORD=$(whiptail --inputbox "Введите Discord (username#0000):" 10 60 --title "Discord" 3>&1 1>&2 2>&3)
+  TWITTER=$(whiptail --inputbox "Введите Twitter (@...):" 10 60 --title "Twitter" 3>&1 1>&2 2>&3)
 
   # Определяем архитектуру
   ARCH=$(uname -m)
@@ -57,18 +62,51 @@ install_node() {
     exit 1
   fi
 
-  # Создаем директорию
   mkdir -p ~/pipe/download_cache
-  cd ~/pipe
+  cd ~/pipe || exit
 
-  # Скачиваем бинарник
+  echo -e "${CYAN}Скачиваем бинарник...${NC}"
   wget -O pop "$BIN_URL"
   chmod +x pop
 
-  echo -e "${GREEN}Запускаем pop через screen...${NC}"
-  screen -S popnode -dm bash -c "./pop --ram $RAM --max-disk $DISK --cache-dir ~/pipe/download_cache --pubKey $SOLANA --invite-code $INVITE"
+  echo -e "${GREEN}Запускаем pop в screen-сессии...${NC}"
+  cat > config.json <<EOF
+{
+  "pop_name": "$NAME",
+  "pop_location": "Earth, Internet",
+  "invite_code": "$INVITE",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 443,
+    "http_port": 80,
+    "workers": 0
+  },
+  "cache_config": {
+    "memory_cache_size_mb": $((RAM * 1024)),
+    "disk_cache_path": "./download_cache",
+    "disk_cache_size_gb": $DISK,
+    "default_ttl_seconds": 86400,
+    "respect_origin_headers": true,
+    "max_cacheable_size_mb": 1024
+  },
+  "api_endpoints": {
+    "base_url": "https://dataplane.pipenetwork.com"
+  },
+  "identity_config": {
+    "node_name": "$NAME",
+    "name": "$NAME",
+    "email": "$EMAIL",
+    "website": "$SITE",
+    "twitter": "$TWITTER",
+    "discord": "$DISCORD",
+    "telegram": "$TG",
+    "solana_pubkey": "$SOLANA"
+  }
+}
+EOF
 
-  echo -e "${GREEN}✅ Установка завершена. Нода работает в screen-сессии 'popnode'.${NC}"
+  screen -S popnode -dm bash -c "./pop --config config.json"
+  echo -e "${GREEN}✅ Нода установлена и запущена в screen сессии 'popnode'.${NC}"
 }
 
 check_status() {
@@ -85,21 +123,22 @@ remove_node() {
 }
 
 update_node() {
-  echo -e "${BLUE}Обновляем POP Node до последней версии...${NC}"
+  echo -e "${BLUE}Обновляем POP Node...${NC}"
   screen -S popnode -X quit || true
   pkill -f pop || true
   cd ~/pipe || exit
   rm -f pop
   wget -O pop https://dl.pipecdn.app/v0.2.8/pop
   chmod +x pop
-  echo -e "${GREEN}✅ Обновлено. Перезапустите вручную или из меню.${NC}"
+  screen -S popnode -dm bash -c "./pop --config config.json"
+  echo -e "${GREEN}✅ Обновлено и перезапущено!${NC}"
 }
 
-# Главное меню
+# Меню
 animate_loading
 CHOICE=$(whiptail --title "PIPE Node Установщик" \
   --menu "Выберите действие:" 15 60 6 \
-  "1" "Установить ноду" \
+  "1" "Установить POP Node" \
   "2" "Проверить статус" \
   "3" "Удалить ноду" \
   "4" "Обновить POP" \
